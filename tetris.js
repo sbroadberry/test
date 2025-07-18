@@ -94,7 +94,7 @@ function drawblock(xpos=10, ypos=10, shadow=false)
 	for ( y=0; y< BLOCKWIDTH; y++) {
 		for(x=0; x< BLOCKWIDTH; x++) {
 			
-			var x1, y2, x2, y2
+			var x1, y1, x2, y2
 			x1 = leftmarg + (xpos + x) * blockImage.width;
 			y1 = topmarg + (ypos + y) * blockImage.height;
 			x2 = x1 + blockImage.width;
@@ -134,7 +134,7 @@ function shownextblock(blocktype=2, xpos=15, ypos=10)
 {
 	var startindex = blocktype * BLOCKWIDTH;
 	
-	var x1, y2, x2, y2
+	var x1, y1, x2, y2
 
 	// Draw box for next block
 	
