@@ -18,6 +18,7 @@ var topmarg;
 
 var lines=0;
 var GSCALE=0;
+var blockSize=0;
 var MOBILE = false;
 var DEBUG = false;   // CHANGE!! display onscreen readings 
 var IMMORTAL = false; 
@@ -533,36 +534,29 @@ function resetGame()
 	mode=6;				// Get Ready!	
 }
 
-function windowResized() {
-  //resizeCanvas(windowWidth, windowHeight);
-  //width = 800;
- // height = 600;
+function updateLayout() {
+  resizeCanvas(windowWidth, windowHeight);
 
-  var fullwidth = windowHeight>windowWidth?windowWidth:windowHeight;
-	
-  var scale = fullwidth / 800;
-	
-//  camera.zoom = (scale);
-//  camera.on();
-  //camera.position.x=0;
-  //camera.position.y=0;  
-	
+  blockSize = floor(min(windowWidth / 12, windowHeight / 22));
+
+  if (blockImage) blockImage.resize(blockSize, blockSize);
+  if (IACTImage) IACTImage.resize(blockSize, 0);
+  if (gameOverImage) gameOverImage.resize(blockSize * 10, 0);
+
+  leftmarg = (width - blockSize * 10) / 2;
+  topmarg = (height - blockSize * 20) / 2;
+}
+
+function windowResized() {
+  updateLayout();
 }
 
 function setup() {
-	
-	//if (windowWidth < 800 && windowHeight > 800)
-	createCanvas(windowWidth,windowHeight);  // 800, 720
-	//else
-		
-	createCanvas(1280,720);
-	
-	leftmarg = (width - 250) / 2;  
-	topmarg = (height - 400) / 2;
 
-	IACTImage.resize(30,0);
+        createCanvas(windowWidth, windowHeight);
+        updateLayout();
 
-	GSCALE = 1.0;
+        GSCALE = 1.0;
 	
 	mode = 2;	// show splash screen
 
