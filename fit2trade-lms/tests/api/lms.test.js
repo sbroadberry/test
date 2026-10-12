@@ -190,7 +190,42 @@ test('migration import: CSV preview + run is idempotent and creates certificates
   const jobs = await admin.get('/api/import/jobs'); assert.equal(jobs.data.jobs.filter((j) => j.status === 'completed').length, 2);
   const tmpl = await (await admin.get('/api/import/templates/records.csv', { raw: true })).text(); assert.match(tmpl, /Certificate code/);
   const manager = srv.client(); await admin.post('/api/users', { email: 'mgr@example.com', password: 'Manager123!', first_name: 'M', role: 'manager' }); await manager.login('mgr@example.com', 'Manager123!');
-  assert.equal((await manager.get('/api/import/sources')).status, 403); // admins only
+  assert.equal((await manager.get('/api/import/sources')).status, 200); // managers may migrate too
+  const learnerC = srv.client(); await learnerC.login('test.learner@example.com', 'Learner123!');
+  assert.equal((await learnerC.get('/api/import/sources')).status, 403);
+});
+
+test('migration import: TalentLMS users + progress exports (learners by name/login), xlsx and manual mapping', async () => {
+  const { makeXlsx } = await import('../unit/importer-formats.test.js');
+  const users = '"Login","First name","Last name","Email","User type","Status","Groups"\n"pb","Patrick","Byrne","patrick.b@example.com","Learner-Type","Active","Cork"\n';
+  const progress = '"User","Course","Enrolled on","Completed on","Progress (%)","Score","Status","Certificate"\n"Patrick Byrne (pb)","Test Course","15/01/2025","20/01/2025","100","77","Completed","Yes"\n"Test Learner","Test Course","15/01/2025","","10","","In progress","No"\n';
+  const form = new FormData(); form.append('source', 'talentlms'); form.append('mode', 'csv');
+  form.append('files', new Blob([progress], { type: 'text/csv' }), 'course-progress.csv'); form.append('files', new Blob([users], { type: 'text/csv' }), 'users.csv');
+  const preview = await admin.post('/api/import/preview', undefined, { form });
+  assert.equal(preview.status, 200, JSON.stringify(preview.data));
+  const s = preview.data.summary;
+  assert.equal(s.users.total, 2); // Patrick from users export + "Test Learner" matched by name to the existing account
+  assert.equal(s.enrollments.total, 2); assert.equal(s.unresolved, 0); assert.equal(s.certificates.total, 1);
+  assert.deepEqual(s.headers['users.csv'], ['Login', 'First name', 'Last name', 'Email', 'User type', 'Status', 'Groups']);
+  const run = await admin.post(`/api/import/jobs/${preview.data.jobId}/run`, { options: {} });
+  assert.equal(run.data.result.users.created, 1); assert.equal(run.data.result.certificates.created, 1);
+  const pb = (await admin.get('/api/users?q=patrick.b')).data.users[0];
+  assert.equal(pb.external_id, 'pb'); assert.equal(pb.group_names, 'Cork'); assert.equal(pb.completions, 1);
+  // xlsx with unusual headers: nothing detected until mapped
+  const xlsx = makeXlsx([['Staff mail', 'Person', 'Programme', 'Outcome', 'Finished'], ['xl.user@example.com', 'Excel User', 'Test Course', 'Pass', new Date(Date.UTC(2025, 2, 3))]]);
+  const f2 = new FormData(); f2.append('source', 'csv'); f2.append('mode', 'csv'); f2.append('files', new Blob([xlsx]), 'export.xlsx');
+  const p2 = await admin.post('/api/import/preview', undefined, { form: f2 });
+  assert.equal(p2.status, 200, JSON.stringify(p2.data)); assert.equal(p2.data.summary.users.total, 0); assert.match(p2.data.summary.warnings[0], /could not find an Email/);
+  const f3 = new FormData(); f3.append('source', 'csv'); f3.append('mode', 'csv'); f3.append('files', new Blob([xlsx]), 'export.xlsx');
+  f3.append('overrides', JSON.stringify({ 'export.xlsx': { email: 'Staff mail', full_name: 'Person', course: 'Programme', status: 'Outcome', completed_at: 'Finished' } }));
+  const p3 = await admin.post('/api/import/preview', undefined, { form: f3 });
+  assert.equal(p3.data.summary.users.total, 1); assert.equal(p3.data.summary.enrollments.completed, 1);
+  const r3 = await admin.post(`/api/import/jobs/${p3.data.jobId}/run`, { options: {} });
+  assert.equal(r3.data.result.users.created, 1); assert.equal(r3.data.result.enrollments.created, 1);
+  const xl = await admin.get(`/api/users/${(await admin.get('/api/users?q=xl.user')).data.users[0].id}`);
+  assert.equal(xl.data.enrollments[0].completed_at.slice(0, 10), '2025-03-03');
+  const bad = new FormData(); bad.append('source', 'csv'); bad.append('mode', 'csv'); bad.append('files', new Blob(['x']), 'old.xls');
+  assert.equal((await admin.post('/api/import/preview', undefined, { form: bad })).status, 400);
 });
 
 test('learning paths and live sessions (simulated provider) with attendance completing a live module', async () => {

@@ -1,12 +1,10 @@
 /** Generic CSV / Moodle / Docebo / Cornerstone-style exports: any CSV with an email column (+ optional course columns). */
-import { emptyDataset, parseCsv, datasetFromCsvRows } from './normalise.js';
+import { datasetFromFiles } from './normalise.js';
 
 export const meta = { id: 'csv', label: 'Generic CSV (Moodle, Docebo, Excel export, …)', csv: 'Any CSV with an Email column. Add Course, Status, Completed date, Expiry date and Certificate code columns to migrate learning records and certificates.' };
 
 export function fromCsvFiles(files, opts = {}) {
-  const ds = emptyDataset(opts.source || 'csv');
-  for (const f of files) datasetFromCsvRows(parseCsv(f.text), { ...opts, fileName: f.name }, ds);
-  return ds;
+  return datasetFromFiles(files, { ...opts, source: opts.source || 'csv' });
 }
 
 export const TEMPLATES = {

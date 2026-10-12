@@ -1,5 +1,6 @@
 /** Shared helpers for turning exports from other LMS platforms into the Fit2Trade Learn import dataset. */
 import { parse } from 'csv-parse/sync';
+import { rowsFromXlsx } from './xlsx.js';
 
 export const SYNONYMS = {
   email: ['email', 'e-mail', 'email address', 'user email', 'learner email', 'emailaddress', 'mail'],
@@ -145,57 +146,146 @@ export function toSeconds(v) {
 }
 
 export function emptyDataset(source) {
-  return { source, users: [], courses: [], groups: [], enrollments: [], certificates: [], warnings: [] };
+  return { source, users: [], courses: [], groups: [], enrollments: [], certificates: [], warnings: [], mappings: {}, headers: {}, unresolved: [] };
 }
 
-/** Generic CSV -> dataset. Decides per file whether rows are users or course records from the mapped columns. */
-export function datasetFromCsvRows(rows, { source = 'csv', dateFormat = 'dmy', overrides = {}, fileName = 'file.csv' } = {}, dataset = emptyDataset(source)) {
+const STATUS_CELL = /^(completed?|passed|failed|in[ -]?progress|not[ -]?(started|attempted|completed)|incomplete|enrol+ed|assigned|yes|no|n\/a|-|—|\d{1,3}\s*%|\d{1,2}[\/.\-]\d{1,2}[\/.\-]\d{2,4})/i;
+function looksLikeStatusColumn(rows, header) {
+  const values = rows.map((r) => String(r[header] ?? '').trim()).filter(Boolean);
+  if (!values.length) return false;
+  const hits = values.filter((v) => STATUS_CELL.test(v) || /^(completed|passed|failed|in progress|not started)/i.test(v)).length;
+  return hits / values.length >= 0.8;
+}
+
+/** "Aoife Murphy (aoife.m)" / "aoife.m - Aoife Murphy" / "Murphy, Aoife" -> { name, login } */
+export function parseUserRef(value) {
+  const s = String(value || '').trim();
+  let m = /^(.*?)\s*[\(\[]([^\)\]]+)[\)\]]\s*$/.exec(s);
+  if (m) return { name: m[1].trim(), login: m[2].trim() };
+  m = /^([^\s@]+)\s+[-–|]\s+(.+)$/.exec(s);
+  if (m) return { name: m[2].trim(), login: m[1].trim() };
+  if (s.includes('@')) return { name: '', login: s };
+  return { name: s, login: '' };
+}
+
+/** Pre-pass over a set of files: returns [{ name, rows, headers, map, hasCourse, isMatrix, courseColumns }] with user files first. */
+export function analyseFiles(files, { overrides = {} } = {}) {
+  const out = [];
+  for (const f of files) {
+    const rows = f.rows || parseCsv(f.text);
+    const headers = rows.length ? Object.keys(rows[0]) : [];
+    const ov = overrides[f.name] || overrides.__all__ || {};
+    const map = mapHeaders(headers, ov);
+    const mapped = new Set(Object.values(map));
+    let courseColumns = [];
+    if (!map.course && !map.course_code) {
+      const cands = headers.filter((h) => !mapped.has(h) && !/^(id|login|username|user ?id|branch|branches|groups?|custom|last login|phone|notes?)$/i.test(norm(h)));
+      courseColumns = cands.filter((h) => looksLikeStatusColumn(rows, h));
+      if (courseColumns.length && courseColumns.length < cands.length - 2 && courseColumns.length < 2) courseColumns = []; // a lone status-like column is more likely "Status"
+    }
+    const hasCourse = Boolean(map.course || map.course_code) || courseColumns.length > 0;
+    out.push({ name: f.name, rows, headers, map, hasCourse, isMatrix: courseColumns.length > 0, courseColumns });
+  }
+  return out.sort((a, b) => Number(a.hasCourse) - Number(b.hasCourse));
+}
+
+/**
+ * Convert parsed rows into the import dataset. Handles three layouts:
+ *  - user exports (email column, no course column)
+ *  - learning-record exports (one row per user+course, user given as email, login or "Name (login)")
+ *  - training-matrix exports (one row per user, one column per course containing the status)
+ * opts.lookupUser(ref) may resolve a login/name to an email from the existing LMS.
+ */
+export function datasetFromCsvRows(rows, { source = 'csv', dateFormat = 'dmy', overrides = {}, fileName = 'file.csv', lookupUser } = {}, dataset = emptyDataset(source), analysed = null) {
+  const info = analysed || analyseFiles([{ name: fileName, rows }], { overrides })[0];
+  const { headers, map, hasCourse, isMatrix, courseColumns } = info;
+  dataset.mappings = dataset.mappings || {}; dataset.headers = dataset.headers || {}; dataset.unresolved = dataset.unresolved || [];
+  dataset.headers[fileName] = headers;
+  dataset.mappings[fileName] = isMatrix ? { ...map, course_columns: courseColumns.join(' | ') } : map;
   if (!rows.length) { dataset.warnings.push(`${fileName}: no rows found`); return dataset; }
-  const headers = Object.keys(rows[0]);
-  const map = mapHeaders(headers, overrides);
   const col = (row, f) => (map[f] ? row[map[f]] : undefined);
-  const hasCourse = Boolean(map.course || map.course_code);
-  if (!map.email && !map.username && !map.full_name) { dataset.warnings.push(`${fileName}: could not find an email/user column (headers: ${headers.join(', ')})`); return dataset; }
-  dataset.mappings = dataset.mappings || {};
-  dataset.mappings[fileName] = map;
+  if (!map.email && !map.username && !map.full_name) { dataset.warnings.push(`${fileName}: could not find an Email, Login or Name column (headers: ${headers.join(', ')}). Use the column mapping to choose one.`); return dataset; }
+
+  // users already known from earlier files (users exports are processed first)
+  const byLogin = new Map(), byName = new Map();
+  for (const u of dataset.users) { if (u.external_id) byLogin.set(u.external_id.toLowerCase(), u.email); byName.set(`${u.first_name} ${u.last_name}`.trim().toLowerCase(), u.email); byName.set(`${u.last_name}, ${u.first_name}`.trim().toLowerCase(), u.email); }
+  const resolve = (row) => {
+    let email = String(col(row, 'email') || '').trim().toLowerCase();
+    const username = String(col(row, 'username') || '').trim();
+    const ref = parseUserRef(col(row, 'full_name') || '');
+    const login = username || ref.login;
+    if (!email && login.includes('@')) email = login.toLowerCase();
+    if (!email && login && byLogin.has(login.toLowerCase())) email = byLogin.get(login.toLowerCase());
+    if (!email && ref.name && byName.has(ref.name.toLowerCase())) email = byName.get(ref.name.toLowerCase());
+    if (!email && lookupUser) { const found = lookupUser({ login, name: ref.name }); if (found) email = found.toLowerCase(); }
+    return { email, login, name: ref.name };
+  };
+
   let n = 0;
   for (const row of rows) {
     n += 1;
-    let email = String(col(row, 'email') || '').trim().toLowerCase();
-    const username = String(col(row, 'username') || '').trim();
-    if (!email && username.includes('@')) email = username.toLowerCase();
-    if (!email) { dataset.warnings.push(`${fileName} row ${n}: missing email, skipped`); continue; }
+    const { email, login, name } = resolve(row);
+    if (!email) {
+      const label = name || login || '(blank)';
+      dataset.unresolved.push({ file: fileName, row: n, user: label });
+      if (dataset.unresolved.length <= 25) dataset.warnings.push(`${fileName} row ${n}: user "${label}" has no email and could not be matched to a known user`);
+      continue;
+    }
     let first = col(row, 'first_name'), last = col(row, 'last_name');
-    if (!first && !last) { const sp = splitName(col(row, 'full_name') || email.split('@')[0]); first = sp.first; last = sp.last; }
+    if (!first && !last) { const sp = splitName(name || email.split('@')[0]); first = sp.first; last = sp.last; }
+    const known = dataset.users.find((u) => u.email === email);
     const user = {
-      email, first_name: String(first || '').trim(), last_name: String(last || '').trim(),
-      role: map.role ? normaliseRole(col(row, 'role')) : 'learner',
-      status: map.user_status ? normaliseUserStatus(col(row, 'user_status')) : (!hasCourse && map.status ? normaliseUserStatus(col(row, 'status')) : 'active'),
-      job_title: String(col(row, 'job_title') || '').trim(), department: String(col(row, 'department') || '').trim(), location: String(col(row, 'location') || '').trim(),
-      groups: String(col(row, 'group') || '').split(/[;,|]/).map((g) => g.trim()).filter(Boolean),
-      external_id: hasCourse ? '' : String(col(row, 'external_id') || username || '').trim(),
-      created_at: parseDate(col(row, 'created_at'), dateFormat),
+      email, first_name: String(first || known?.first_name || '').trim(), last_name: String(last || known?.last_name || '').trim(),
+      role: map.role ? normaliseRole(col(row, 'role')) : (known?.role || 'learner'),
+      status: map.user_status ? normaliseUserStatus(col(row, 'user_status')) : (!hasCourse && map.status ? normaliseUserStatus(col(row, 'status')) : (known?.status || 'active')),
+      job_title: String(col(row, 'job_title') || known?.job_title || '').trim(), department: String(col(row, 'department') || known?.department || '').trim(), location: String(col(row, 'location') || known?.location || '').trim(),
+      groups: [...new Set([...(known?.groups || []), ...String(col(row, 'group') || '').split(/[;,|]/).map((g) => g.trim()).filter(Boolean)])],
+      external_id: known?.external_id || (hasCourse ? login : String(col(row, 'external_id') || login || '').trim()),
+      created_at: known?.created_at || parseDate(col(row, 'created_at'), dateFormat),
     };
-    dataset.users.push(user);
+    if (known) Object.assign(known, user); else { dataset.users.push(user); if (user.external_id) byLogin.set(user.external_id.toLowerCase(), email); byName.set(`${user.first_name} ${user.last_name}`.trim().toLowerCase(), email); }
     if (!hasCourse) continue;
-    const courseTitle = String(col(row, 'course') || '').trim();
-    const courseCode = String(col(row, 'course_code') || '').trim();
-    if (!courseTitle && !courseCode) continue;
-    dataset.courses.push({ title: courseTitle || courseCode, code: courseCode, category: String(col(row, 'category') || '').trim() });
-    const progress = toNumber(col(row, 'progress'));
-    const completedAt = parseDate(col(row, 'completed_at'), dateFormat);
-    const status = normaliseStatus(col(row, 'status'), { progress, completedAt });
-    const enrollment = {
-      email, course: courseTitle, course_code: courseCode, status,
-      progress_pct: progress ?? (status === 'completed' ? 100 : 0), score: toNumber(col(row, 'score')),
-      enrolled_at: parseDate(col(row, 'enrolled_at'), dateFormat), completed_at: status === 'completed' ? (completedAt || parseDate(col(row, 'enrolled_at'), dateFormat)) : null,
-      due_at: parseDate(col(row, 'due_at'), dateFormat), expires_at: parseDate(col(row, 'expires_at'), dateFormat), time_spent_sec: toSeconds(col(row, 'time_spent')),
-    };
-    dataset.enrollments.push(enrollment);
-    const certCode = String(col(row, 'certificate_code') || '').trim();
-    if (status === 'completed' && (certCode || enrollment.expires_at || map.certificate_code)) {
-      dataset.certificates.push({ email, course: courseTitle, course_code: courseCode, code: certCode, issued_at: enrollment.completed_at, expires_at: enrollment.expires_at });
+
+    const records = [];
+    if (isMatrix) {
+      for (const h of courseColumns) {
+        const cell = String(row[h] ?? '').trim();
+        if (!cell || /^(-|—|n\/a)$/i.test(cell)) continue;
+        const dateIn = /(\d{1,2}[\/.\-]\d{1,2}[\/.\-]\d{2,4}|\d{4}-\d{2}-\d{2})/.exec(cell);
+        const pct = /(\d{1,3})\s*%/.exec(cell);
+        const completedAt = dateIn ? parseDate(dateIn[1], dateFormat) : null;
+        const status = normaliseStatus(cell.replace(/\(.*\)/, '').trim(), { progress: pct ? Number(pct[1]) : null, completedAt });
+        records.push({ courseTitle: h.trim(), courseCode: '', status, progress: pct ? Number(pct[1]) : null, score: null, enrolledAt: null, completedAt: status === 'completed' ? completedAt : null, dueAt: null, expiresAt: null, timeSpent: 0, certCode: '' });
+      }
+    } else {
+      const courseTitle = String(col(row, 'course') || '').trim();
+      const courseCode = String(col(row, 'course_code') || '').trim();
+      if (!courseTitle && !courseCode) continue;
+      const progress = toNumber(col(row, 'progress'));
+      const completedAt = parseDate(col(row, 'completed_at'), dateFormat);
+      const status = normaliseStatus(col(row, 'status'), { progress, completedAt });
+      records.push({ courseTitle, courseCode, status, progress, score: toNumber(col(row, 'score')), enrolledAt: parseDate(col(row, 'enrolled_at'), dateFormat), completedAt: status === 'completed' ? (completedAt || parseDate(col(row, 'enrolled_at'), dateFormat)) : null,
+        dueAt: parseDate(col(row, 'due_at'), dateFormat), expiresAt: parseDate(col(row, 'expires_at'), dateFormat), timeSpent: toSeconds(col(row, 'time_spent')), certCode: String(col(row, 'certificate_code') || '').trim() });
+    }
+    for (const r of records) {
+      dataset.courses.push({ title: r.courseTitle || r.courseCode, code: r.courseCode, category: String(col(row, 'category') || '').trim() });
+      dataset.enrollments.push({ email, course: r.courseTitle, course_code: r.courseCode, status: r.status, progress_pct: r.progress ?? (r.status === 'completed' ? 100 : 0), score: r.score, enrolled_at: r.enrolledAt, completed_at: r.completedAt, due_at: r.dueAt, expires_at: r.expiresAt, time_spent_sec: r.timeSpent });
+      const certFlag = /^(yes|y|true|issued|1)$/i.test(r.certCode);
+      if (r.status === 'completed' && (r.certCode || r.expiresAt || map.certificate_code)) {
+        dataset.certificates.push({ email, course: r.courseTitle, course_code: r.courseCode, code: certFlag ? '' : r.certCode, issued_at: r.completedAt, expires_at: r.expiresAt });
+      }
     }
   }
   return dataset;
 }
+
+/** Parse all uploaded files (CSV/TSV or XLSX) into one dataset: user exports first, then learning records. */
+export function datasetFromFiles(files, opts = {}) {
+  const ds = emptyDataset(opts.source || 'csv');
+  const prepared = files.map((f) => ({ name: f.name, rows: f.rows || (f.buffer && /\.xlsx$/i.test(f.name) ? rowsFromXlsx(f.buffer) : parseCsv(f.text ?? (f.buffer ? f.buffer.toString('utf8') : ''))) }));
+  for (const info of analyseFiles(prepared, { overrides: opts.overrides || {} })) datasetFromCsvRows(info.rows, { ...opts, fileName: info.name }, ds, info);
+  const seen = new Set();
+  ds.courses = ds.courses.filter((c) => { const k = `${c.code}|${c.title}`.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; });
+  return ds;
+}
+

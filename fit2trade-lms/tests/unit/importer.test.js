@@ -38,10 +38,10 @@ test('header mapping recognises TalentLMS / LearnUpon / Moodle style columns', (
 test('datasetFromCsvRows builds users, courses, enrolments and certificates', () => {
   const csv = 'Email;Name;Course;Status;Completed on;Expiry date;Certificate code;Group\njane@x.ie;Jane Doe;Manual Handling;Completed;10/01/2025;10/01/2027;MH-1;Dublin\njane@x.ie;Jane Doe;Fire Safety;In progress;;;;Dublin\n;Nobody;Fire Safety;;;;;\n';
   const ds = datasetFromCsvRows(parseCsv(csv), { fileName: 'export.csv' });
-  assert.equal(ds.users.length, 2); assert.equal(ds.users[0].first_name, 'Jane'); assert.deepEqual(ds.users[0].groups, ['Dublin']);
+  assert.equal(ds.users.length, 1); assert.equal(ds.users[0].first_name, 'Jane'); assert.deepEqual(ds.users[0].groups, ['Dublin']); // rows for the same email are merged
   assert.equal(ds.enrollments.length, 2); assert.equal(ds.enrollments[0].status, 'completed'); assert.equal(ds.enrollments[0].expires_at, '2027-01-10T00:00:00.000Z'); assert.equal(ds.enrollments[1].status, 'in_progress');
   assert.equal(ds.certificates.length, 1); assert.equal(ds.certificates[0].code, 'MH-1');
-  assert.equal(ds.warnings.length, 1); assert.match(ds.warnings[0], /missing email/);
+  assert.equal(ds.warnings.length, 1); assert.match(ds.warnings[0], /no email/);
 });
 
 test('gradeQuiz scores single, multi and true/false questions', () => {

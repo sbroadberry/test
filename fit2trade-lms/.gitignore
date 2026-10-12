@@ -6,4 +6,4 @@ data/uploads/
 data/scorm/
 .env
 test-results/
-docs/screenshots/talentlms-course-progress.csv
+docs/screenshots/*.csv

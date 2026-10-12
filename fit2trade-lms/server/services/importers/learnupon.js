@@ -1,5 +1,5 @@
 /** LearnUpon adapter: REST API v1 (https://<portal>.learnupon.com/api/v1, basic auth) and CSV report exports. */
-import { emptyDataset, parseCsv, datasetFromCsvRows, parseDate, normaliseRole, normaliseStatus } from './normalise.js';
+import { emptyDataset, datasetFromFiles, parseDate, normaliseRole, normaliseStatus } from './normalise.js';
 
 export const meta = {
   id: 'learnupon', label: 'LearnUpon',
@@ -47,7 +47,5 @@ export async function fromApi({ domain, username, password, baseUrl, fetchImpl =
 }
 
 export function fromCsvFiles(files, opts = {}) {
-  const ds = emptyDataset('learnupon');
-  for (const f of files) datasetFromCsvRows(parseCsv(f.text), { ...opts, source: 'learnupon', fileName: f.name }, ds);
-  return ds;
+  return datasetFromFiles(files, { ...opts, source: 'learnupon' });
 }

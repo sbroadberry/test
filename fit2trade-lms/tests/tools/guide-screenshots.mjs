@@ -75,15 +75,12 @@ await page.click('text=Notifications & email'); await shot('30-settings-notifica
 await page.click('text=Branding'); await shot('31-settings-branding');
 
 // ---------- Migration ----------
-const csv = 'Email,First name,Last name,User type,Department,Group,Course,Status,Completed on,Expiry date,Certificate code\n' +
-  'patrick.byrne@example.com,Patrick,Byrne,Learner,Hospitality,Cork Stores,Manual Handling Theory,Completed,14/02/2025,14/02/2027,TL-2025-0141\n' +
-  'patrick.byrne@example.com,Patrick,Byrne,Learner,Hospitality,Cork Stores,Fire Safety Awareness,Completed,20/03/2025,20/03/2026,TL-2025-0202\n' +
-  'grainne.mc@example.com,Grainne,McCarthy,Learner,Hospitality,Cork Stores,Manual Handling Theory,In progress,,,\n' +
-  'grainne.mc@example.com,Grainne,McCarthy,Learner,Hospitality,Cork Stores,HACCP Level 2,Completed,02/05/2025,02/05/2028,TL-2025-0310\n' +
-  'tom.ahern@example.com,Tom,Ahern,Trainer,Training,,Fire Safety Awareness,Completed,11/01/2025,11/01/2026,TL-2025-0019\n';
-const csvPath = path.join(out, 'talentlms-course-progress.csv'); fs.writeFileSync(csvPath, csv);
+const usersCsv = '"Login","First name","Last name","Email","User type","Status","Registration date","Groups"\n"patrick.b","Patrick","Byrne","patrick.byrne@example.com","Learner-Type","Active","12/01/2024 10:15","Cork Stores"\n"grainne.m","Grainne","McCarthy","grainne.mc@example.com","Learner-Type","Active","03/02/2024 11:00","Cork Stores"\n"tom.a","Tom","Ahern","tom.ahern@example.com","Trainer-Type","Active","05/02/2024 09:00","Training"\n';
+const progressCsv = '"User","Course","Course code","Enrolled on","Completed on","Progress (%)","Score","Time in course","Status","Certificate","Expiry date"\n"Patrick Byrne (patrick.b)","Manual Handling Theory","MH-01","10/02/2025","14/02/2025","100","91","1h 05m","Completed","TL-2025-0141","14/02/2027"\n"Patrick Byrne (patrick.b)","Fire Safety Awareness","FS-01","15/03/2025","20/03/2025","100","88","40m","Completed","TL-2025-0202","20/03/2026"\n"Grainne McCarthy (grainne.m)","Manual Handling Theory","MH-01","01/04/2025","","40","","25m","In progress","",""\n"Grainne McCarthy (grainne.m)","HACCP Level 2","HACCP-2","20/04/2025","02/05/2025","100","95","2h 10m","Completed","TL-2025-0310","02/05/2028"\n"Tom Ahern (tom.a)","Fire Safety Awareness","FS-01","05/01/2025","11/01/2025","100","100","35m","Completed","TL-2025-0019","11/01/2026"\n';
+const usersPath = path.join(out, 'talentlms-users.csv'); fs.writeFileSync(usersPath, usersCsv);
+const csvPath = path.join(out, 'talentlms-course-progress.csv'); fs.writeFileSync(csvPath, progressCsv);
 await go('/admin/import'); await shot('32-import-step1-source', { full: true });
-await page.click('[data-testid=import-next]'); await page.waitForTimeout(400); await page.setInputFiles('[data-testid=import-files]', csvPath); await shot('33-import-step2-upload', { full: true });
+await page.click('[data-testid=import-next]'); await page.waitForTimeout(400); await page.setInputFiles('[data-testid=import-files]', [usersPath, csvPath]); await shot('33-import-step2-upload', { full: true });
 await page.click('[data-testid=import-preview]'); await page.waitForSelector('[data-testid=import-run]'); await shot('34-import-step3-preview', { full: true });
 await page.click('[data-testid=import-run]'); await page.waitForSelector('[data-testid=import-result]'); await shot('35-import-step4-result', { full: true });
 await go('/admin/users?'); await page.fill('[data-testid=user-search]', 'patrick'); await page.waitForTimeout(700); await page.locator('tr', { hasText: 'Patrick Byrne' }).locator('a:has-text("Record")').click(); await page.waitForTimeout(700); await shot('36-migrated-user-record', { full: true });

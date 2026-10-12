@@ -18,19 +18,20 @@ router.get('/templates/:type.csv', (req, res) => {
   res.send(t);
 });
 
-router.use(authenticate, requireRole('admin'));
+router.use(authenticate, requireRole('manager'));
 router.get('/sources', (req, res) => res.json({ sources: SOURCES }));
 router.get('/jobs', (req, res) => res.json({ jobs: all('SELECT j.id, j.source, j.status, j.options_json, j.summary_json, j.created_at, j.completed_at, u.email AS created_by_email FROM import_jobs j LEFT JOIN users u ON u.id = j.created_by ORDER BY j.created_at DESC LIMIT 50').map((j) => ({ ...j, options: safe(j.options_json), summary: safe(j.summary_json) })) }));
 
 /** Step 1: upload files or API credentials -> parsed + summarised dataset stored as a preview job. */
 router.post('/preview', upload.array('files', 10), async (req, res) => {
   const b = req.body || {};
-  const files = (req.files || []).map((f) => ({ name: f.originalname, text: fs.readFileSync(f.path, 'utf8') }));
+  const files = (req.files || []).map((f) => ({ name: f.originalname, buffer: fs.readFileSync(f.path) }));
   for (const f of req.files || []) fs.rm(f.path, { force: true }, () => {});
   const mode = b.mode || (files.length ? 'csv' : 'api');
   let overrides = {}; try { overrides = b.overrides ? JSON.parse(b.overrides) : {}; } catch {}
   const api = { domain: b.domain, apiKey: b.apiKey, username: b.username, password: b.password, baseUrl: b.baseUrl || undefined };
-  if (mode === 'csv' && !files.length) return res.status(400).json({ error: 'Upload at least one CSV export' });
+  if (mode === 'csv' && !files.length) return res.status(400).json({ error: 'Upload at least one CSV or Excel (.xlsx) export' });
+  if (files.some((f) => /\.xls$/i.test(f.name))) return res.status(400).json({ error: 'Legacy .xls workbooks are not supported: open the file in Excel and save it as .xlsx or .csv' });
   try {
     const dataset = await buildDataset({ source: b.source || 'csv', mode, files, api, dateFormat: b.dateFormat || 'dmy', overrides });
     const summary = summariseDataset(dataset);

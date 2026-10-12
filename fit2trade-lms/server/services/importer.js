@@ -5,13 +5,31 @@ import * as talentlms from './importers/talentlms.js';
 import * as learnupon from './importers/learnupon.js';
 import * as generic from './importers/generic.js';
 import { notify } from './notifications.js';
+import { SYNONYMS } from './importers/normalise.js';
 
 export const SOURCES = [talentlms.meta, learnupon.meta, generic.meta, { id: 'moodle', label: 'Moodle (CSV export)', csv: generic.meta.csv }];
 
+/** Resolve a login or "First Last" name from a records export against users already in the LMS. */
+export function lookupUser({ login, name }) {
+  if (login) { const u = get('SELECT email FROM users WHERE lower(external_id) = lower(?) OR lower(email) = lower(?)', login, login); if (u) return u.email; }
+  if (name) {
+    const parts = name.trim().split(/\s+/);
+    if (parts.length >= 2) {
+      const first = parts[0], last = parts.slice(1).join(' ');
+      const u = get('SELECT email FROM users WHERE lower(first_name) = lower(?) AND lower(last_name) = lower(?)', first, last) || get('SELECT email FROM users WHERE lower(first_name) = lower(?) AND lower(last_name) = lower(?)', last, first);
+      if (u) return u.email;
+    }
+    const u = get("SELECT email FROM users WHERE lower(first_name || ' ' || last_name) = lower(?)", name.trim());
+    if (u) return u.email;
+  }
+  return null;
+}
+
 export async function buildDataset({ source, mode, files = [], api = {}, dateFormat = 'dmy', overrides = {}, fetchImpl }) {
-  if (source === 'talentlms') return mode === 'api' ? talentlms.fromApi({ ...api, fetchImpl }) : talentlms.fromCsvFiles(files, { dateFormat, overrides });
-  if (source === 'learnupon') return mode === 'api' ? learnupon.fromApi({ ...api, fetchImpl }) : learnupon.fromCsvFiles(files, { dateFormat, overrides });
-  return generic.fromCsvFiles(files, { dateFormat, overrides, source: source || 'csv' });
+  const opts = { dateFormat, overrides, lookupUser };
+  if (source === 'talentlms') return mode === 'api' ? talentlms.fromApi({ ...api, fetchImpl }) : talentlms.fromCsvFiles(files, opts);
+  if (source === 'learnupon') return mode === 'api' ? learnupon.fromApi({ ...api, fetchImpl }) : learnupon.fromCsvFiles(files, opts);
+  return generic.fromCsvFiles(files, { ...opts, source: source || 'csv' });
 }
 
 export function summariseDataset(ds) {
@@ -28,7 +46,10 @@ export function summariseDataset(ds) {
     enrollments: { total: ds.enrollments.length, completed: ds.enrollments.filter((e) => e.status === 'completed').length, inProgress: ds.enrollments.filter((e) => e.status === 'in_progress').length },
     certificates: { total: ds.certificates.length, withExpiry: ds.certificates.filter((c) => c.expires_at).length },
     warnings: ds.warnings.slice(0, 50),
+    unresolved: (ds.unresolved || []).length,
     mappings: ds.mappings || {},
+    headers: ds.headers || {},
+    fields: Object.keys(SYNONYMS),
     sample: { users: [...new Map(ds.users.map((u) => [u.email, u])).values()].slice(0, 5), enrollments: ds.enrollments.slice(0, 5), certificates: ds.certificates.slice(0, 5) },
   };
 }

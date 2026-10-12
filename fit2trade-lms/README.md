@@ -80,8 +80,8 @@ The Teams and Webex integrations are tested against local mock servers that impl
 
 Admin → **Migrate / import**:
 
-1. Choose the source. TalentLMS and LearnUpon can be read directly through their APIs (portal domain + API key or username/password) or from CSV exports; Moodle and other systems via CSV.
-2. Upload the export(s) or enter credentials and click **Analyse & preview**. Columns such as *Email, Name, Course, Status, Completed on, Expiry date, Certificate code, Group* are detected automatically; dates default to day/month/year.
+1. Choose the source. TalentLMS and LearnUpon can be read directly through their APIs (portal domain + API key or username/password) or from CSV/Excel exports; Moodle and other systems via CSV/Excel (.xlsx).
+2. Upload the export(s) or enter credentials and click **Analyse & preview**. Columns such as *Email, Login, Name/User, Course, Status, Completed on, Expiry date, Certificate code, Group* are detected automatically and can be corrected in the column-mapping editor; dates default to day/month/year. Three layouts are understood: users exports, one-row-per-course learning records (learners by email, login or "Name (login)"), and training-matrix exports with one column per course. Upload the users export together with the course-progress export so learners named by login or name are matched to their email; learners already in the LMS are matched automatically.
 3. Review the counts, warnings and samples, choose options (temporary password, welcome notification, skip inactive users, add to a group) and click **Import**.
 4. Migrated users log in with the temporary password and are asked to change it. Their completed courses, scores, certificate numbers and expiry dates appear in their training record, and certificate-expiry reminders continue automatically.
 

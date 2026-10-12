@@ -1,5 +1,5 @@
 /** TalentLMS adapter: REST API v1 (https://<domain>.talentlms.com/api/v1) and CSV exports. */
-import { emptyDataset, parseCsv, datasetFromCsvRows, parseDate, normaliseRole, normaliseUserStatus, normaliseStatus } from './normalise.js';
+import { emptyDataset, datasetFromFiles, parseDate, normaliseRole, normaliseUserStatus, normaliseStatus } from './normalise.js';
 
 export const meta = {
   id: 'talentlms', label: 'TalentLMS',
@@ -64,10 +64,5 @@ export async function fromApi({ domain, apiKey, baseUrl, concurrency = 4, fetchI
 }
 
 export function fromCsvFiles(files, opts = {}) {
-  const ds = emptyDataset('talentlms');
-  for (const f of files) {
-    const rows = parseCsv(f.text);
-    datasetFromCsvRows(rows, { ...opts, source: 'talentlms', fileName: f.name }, ds);
-  }
-  return ds;
+  return datasetFromFiles(files, { ...opts, source: 'talentlms' });
 }
