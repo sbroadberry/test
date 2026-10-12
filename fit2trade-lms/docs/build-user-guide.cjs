@@ -55,7 +55,7 @@ children.push(new Paragraph({ alignment: AlignmentType.CENTER, children: [new Te
 children.push(new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'Fit2Trade Ltd · 32 Fitzwilliam Street Upper, Dublin 2 · www.fit2trade.com', size: 20, color: GREY })] }));
 children.push(new Paragraph({ children: [new PageBreak()] }));
 children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Contents' })] }));
-const contents = ['1. Introduction', '2. Administrator overview', '3. Users and groups', '4. Building courses', '5. Enrolments and learning paths', '6. Live sessions (Teams and Webex)', '7. Reports', '8. Certificate expiry reminders and email', '9. Settings and integrations', '10. Migrating users from TalentLMS and other platforms', '11. Learner guide', 'Appendix A. Installation and configuration summary', 'Appendix B. Demo accounts'];
+const contents = ['1. Introduction', '2. Administrator overview', '3. Users and groups', '4. Building courses', '5. Enrolments and learning paths', '6. Live sessions (Teams and Webex)', '7. Reports', '8. Certificate expiry reminders and email', '9. Settings and integrations', '9A. Companies, branding and single sign-on', '10. Migrating users from TalentLMS and other platforms', '11. Learner guide', 'Appendix A. Installation and configuration summary', 'Appendix B. Demo accounts'];
 for (const c of contents) children.push(new Paragraph({ spacing: { after: 100 }, children: [new TextRun({ text: c, size: 24, color: INK })] }));
 
 // ---------- 1. Introduction ----------
@@ -168,6 +168,24 @@ children.push(table([['Integration', 'What to configure'], ['Microsoft Teams', '
 children.push(...figure('29-settings-integrations', 'Integration status'));
 children.push(...figure('31-settings-branding', 'Branding'));
 
+// ---------- 9b. Companies, branding and SSO ----------
+children.push(h1('9A. Companies, branding and single sign-on'));
+children.push(p('Fit2Trade Learn can host several companies on one installation. Each company has its own name, logo, colours, login page copy, hostnames, email domains and single sign-on rules, so EazySAFE learners see an EazySAFE portal while IACT learners see IACT Academy. Users belong to a company; courses are shared across companies unless a course is restricted to one.'));
+children.push(h2('9A.1 Creating a company and choosing a theme'));
+children.push(...steps(['Open **Companies & branding** (admins) and click **New company**.', 'On the **Details** tab enter the company name, the portal slug (its login page becomes /c/<slug>/login), the website, optional portal hostnames (visitors arriving on learn.example.com see this company\'s login page automatically) and the email domains that belong to the company.', 'On the **Theme & branding** tab click one of the sample themes – Fit2Trade, EazySAFE or IACT – to start, then adjust the portal name, tagline, logo and favicon (paste a URL or upload an image), the primary, accent, text and background colours, the sidebar style and font, and the login page headline, sub-text and background. The live preview on the right updates as you type.', 'On the **Single sign-on** tab choose whether Google and Microsoft sign-in are allowed, whether accounts are created automatically for people in the company\'s email domains, the role they receive and an optional group they join (which assigns the group\'s courses).', 'Click **Save company**. Use **Preview here** on the company card to see the theme applied to your own session, or open the company\'s login link.']));
+children.push(...figure('56-companies', 'Companies & branding with the Fit2Trade, EazySAFE and IACT sample themes'));
+children.push(...figure('57-company-theme-editor', 'The theme editor with live preview'));
+children.push(...figure('58-company-sso', 'Single sign-on rules for a company'));
+children.push(h2('9A.2 What the learner sees'));
+children.push(p('The login page and the whole learning environment take the company\'s logo, colours, portal name and footer. Certificates and emails use the same branding. Learners reach their portal through /c/<slug>/login, through the company hostname, or simply by signing in: the portal remembers the company on that browser.'));
+children.push(...figure('52-login-eazysafe', 'EazySAFE sample theme – login page'));
+children.push(...figure('53-login-iact', 'IACT sample theme – login page'));
+children.push(...figure('54-learner-eazysafe-theme', 'EazySAFE theme applied to the learner dashboard (dark sidebar style)'));
+children.push(h2('9A.3 Setting up Google and Microsoft sign-in'));
+children.push(table([['Provider', 'Steps'], ['Google', 'In Google Cloud Console create an OAuth client of type Web application, add <portal URL>/api/auth/sso/google/callback as an authorised redirect URI, and set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in the server .env file.'], ['Microsoft', 'In Microsoft Entra ID register an application (Web platform) with redirect URI <portal URL>/api/auth/sso/microsoft/callback, create a client secret, and set MS_SSO_CLIENT_ID, MS_SSO_CLIENT_SECRET and MS_SSO_TENANT (common, organizations or your tenant ID).']], [1, 4]));
+children.push(p('Settings → Integrations shows whether each provider is configured and the exact redirect URI to register. Once configured, "Continue with Google" and "Continue with Microsoft" buttons appear on the login page of every company that allows them. Existing users are matched by email address; new users are created in the company whose email domains match, provided automatic provisioning is on.'));
+children.push(note('SSO users never need a portal password. People who sign in with a password can still use SSO later – the accounts are matched by email.'));
+
 // ---------- 10. Migration ----------
 children.push(h1('10. Migrating users from TalentLMS and other platforms'));
 children.push(p('The migration tool (Manage → **Migrate / import**, admins only) brings users, their learning history and their certificates across from your previous LMS so nothing is lost and expiry reminders carry on seamlessly. It supports:'));
@@ -226,7 +244,7 @@ children.push(...figure('51-profile', 'Profile page'));
 children.push(h1('Appendix A. Installation and configuration summary'));
 children.push(p('Fit2Trade Learn is a Node.js application (Node 22 or later). Install with "npm install", build the interface with "npm run build" and start with "npm start". Data (SQLite database, uploads and unpacked SCORM packages) lives in the folder set by DATA_DIR. All settings are environment variables documented in .env.example and the README. Automated tests cover the SCORM run-time (SCORM 1.2 and 2004 packages running in a real browser), the Teams and Webex integrations (against mock Microsoft Graph and Webex services), the TalentLMS importer and the reminder engine.'));
 children.push(h1('Appendix B. Demo accounts'));
-children.push(table([['Role', 'Email', 'Password'], ['Admin', 'admin@fit2trade.com', 'Admin123!'], ['Manager', 'manager@fit2trade.com', 'Manager123!'], ['Instructor', 'trainer@fit2trade.com', 'Trainer123!'], ['Learner', 'aoife.murphy@example.com', 'Learner123!']], [1, 2.5, 1.5]));
+children.push(table([['Role', 'Email', 'Password'], ['Admin', 'admin@fit2trade.com', 'Admin123!'], ['Manager', 'manager@fit2trade.com', 'Manager123!'], ['Instructor', 'trainer@fit2trade.com', 'Trainer123!'], ['Learner', 'aoife.murphy@example.com', 'Learner123!'], ['EazySAFE learner (/c/eazysafe/login)', 'learner@eazysafe.com', 'Learner123!'], ['IACT learner (/c/iact/login)', 'learner@iact.ie', 'Learner123!']], [1.4, 2.3, 1.3]));
 
 const doc = new Document({
   creator: 'Fit2Trade Learn', title: 'Fit2Trade Learn – User Guide', description: 'How to operate the Fit2Trade Learn LMS and migrate users from other platforms',

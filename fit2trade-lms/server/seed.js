@@ -8,17 +8,19 @@ import { db, get, run, uid, now, all } from './db.js';
 import { config } from './config.js';
 import { parseManifest } from './scorm/manifest.js';
 import { enrolUser, updateModuleProgress } from './services/progress.js';
+import { ensureCompanies, getCompanyBySlug } from './services/companies.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
 export function ensureSeed({ demo = true } = {}) {
-  if (get("SELECT 1 FROM users WHERE role = 'admin'")) return false;
+  if (get("SELECT 1 FROM users WHERE role = 'admin'")) { ensureCompanies({ demo: false }); return false; }
+  const defaultCompany = ensureCompanies({ demo });
   const ts = now();
   const pw = (p) => bcrypt.hashSync(p, 8);
   const mk = (email, first, last, role, extra = {}) => {
     const id = uid();
-    run(`INSERT INTO users(id, email, password_hash, first_name, last_name, role, status, job_title, department, location, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
-      id, email, pw(extra.password || 'Password123!'), first, last, role, 'active', extra.job || '', extra.dept || '', extra.loc || '', ts);
+    run(`INSERT INTO users(id, email, password_hash, first_name, last_name, role, status, job_title, department, location, company_id, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+      id, email, pw(extra.password || 'Password123!'), first, last, role, 'active', extra.job || '', extra.dept || '', extra.loc || '', extra.company || defaultCompany.id, ts);
     return id;
   };
   const admin = mk('admin@fit2trade.com', 'Fit2Trade', 'Admin', 'admin', { job: 'Platform administrator', dept: 'Fit2Trade', password: 'Admin123!' });
@@ -35,6 +37,11 @@ export function ensureSeed({ demo = true } = {}) {
     mk('sarah.ryan@example.com', 'Sarah', 'Ryan', 'learner', { job: 'Room Leader', dept: 'Early Years', loc: 'Limerick' }),
     mk('eoin.brennan@example.com', 'Eoin', 'Brennan', 'learner', { job: 'Contractor', dept: 'Facilities', loc: 'Dublin' }),
   ];
+  const eazysafe = getCompanyBySlug('eazysafe'), iact = getCompanyBySlug('iact');
+  const esLearner = mk('learner@eazysafe.com', 'Dara', 'Fitzgerald', 'learner', { job: 'Site Supervisor', dept: 'Construction', loc: 'Dublin', company: eazysafe?.id, password: 'Learner123!' });
+  mk('manager@eazysafe.com', 'Jason', 'Kearns', 'manager', { job: 'EHS Manager', dept: 'EHS', loc: 'Dublin', company: eazysafe?.id, password: 'Manager123!' });
+  const iactLearner = mk('learner@iact.ie', 'Fiona', 'Coomey', 'learner', { job: 'Training Coordinator', dept: 'Training', loc: 'Dublin', company: iact?.id, password: 'Learner123!' });
+  mk('manager@iact.ie', 'Katie', 'Byrne', 'manager', { job: 'Academy Manager', dept: 'Training', loc: 'Dublin', company: iact?.id, password: 'Manager123!' });
   const group = (name, desc, members) => { const id = uid(); run('INSERT INTO groups(id, name, description, created_at) VALUES (?,?,?,?)', id, name, desc, ts); members.forEach((m) => run('INSERT INTO group_members(group_id, user_id) VALUES (?,?)', id, m)); return id; };
   const gHosp = group('Hospitality team', 'Front and back of house staff', [learners[0], learners[1], learners[3]]);
   group('Logistics', 'Warehouse and drivers', [learners[2], learners[5]]);
@@ -104,6 +111,7 @@ export function ensureSeed({ demo = true } = {}) {
   for (const l of learners) { enrolUser(l, c1, { source: 'group', dueAt: due(30) }); enrolUser(l, c5, { source: 'manual', dueAt: due(14) }); }
   for (const l of [learners[0], learners[1], learners[3]]) { enrolUser(l, c2, { source: 'path' }); enrolUser(l, c3, { source: 'path' }); run('INSERT INTO path_enrollments(id, path_id, user_id, enrolled_at) VALUES (?,?,?,?)', uid(), pathId, l, ts); }
   enrolUser(learners[4], c4); enrolUser(learners[0], c4);
+  enrolUser(esLearner, c2); enrolUser(esLearner, c1); enrolUser(iactLearner, c5);
   run('INSERT INTO session_registrations(id, session_id, user_id, status, registered_at) VALUES (?,?,?,?,?)', uid(), sessionId, learners[4], 'registered', ts);
   // Completed histories with varied dates
   const complete = (userId, courseId, daysAgo, score) => {
@@ -121,7 +129,7 @@ export function ensureSeed({ demo = true } = {}) {
   complete(learners[1], c5, 400, 80);  // expired
   run("UPDATE enrollments SET status = 'in_progress', progress_pct = 50, started_at = ? WHERE user_id = ? AND course_id = ?", ts, learners[0], c1);
   run('INSERT INTO notifications(id, user_id, type, title, body, link, read, created_at) VALUES (?,?,?,?,?,?,0,?)', uid(), admin, 'welcome', 'Welcome to Fit2Trade Learn', 'Demo data has been loaded. Try the course builder, the SCORM player, live sessions and the migration tool.', '/admin', ts);
-  console.log('[seed] Demo data loaded (manager@fit2trade.com / Manager123!, trainer@fit2trade.com / Trainer123!, aoife.murphy@example.com / Learner123!)');
+  console.log('[seed] Demo data loaded (manager@fit2trade.com / Manager123!, trainer@fit2trade.com / Trainer123!, aoife.murphy@example.com / Learner123!; sample companies: /c/eazysafe/login learner@eazysafe.com, /c/iact/login learner@iact.ie)');
   return true;
 
   function installScorm(courseId, title, zipPath, position) {

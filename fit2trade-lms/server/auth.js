@@ -12,7 +12,7 @@ export function signToken(user) {
 export function publicUser(u) {
   if (!u) return null;
   const { password_hash, ...rest } = u;
-  return { ...rest, name: `${u.first_name} ${u.last_name}`.trim() };
+  return { ...rest, name: `${u.first_name} ${u.last_name}`.trim(), company_id: u.company_id || null };
 }
 
 export function authenticate(req, res, next) {

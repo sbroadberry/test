@@ -68,9 +68,10 @@ export function recomputeEnrollment(enrollmentId) {
   run('UPDATE enrollments SET status=?, progress_pct=?, score=?, started_at=COALESCE(started_at, ?), completed_at=?, expires_at=? WHERE id=?',
     status, finalPct, score ?? enrollment.score, anyStarted ? ts : null, completedAt, expiresAt, enrollmentId);
 
-  if (status === 'completed' && enrollment.status !== 'completed') {
-    if (course.certificate_enabled) issueCertificate(enrollment, course, expiresAt);
-    notify(enrollment.user_id, 'course_completed', `You completed ${course.title}`,
+  if (status === 'completed') {
+    // issue the certificate whenever a completed enrolment lacks one (covers manual completion of module-less courses)
+    if (course.certificate_enabled && !get('SELECT 1 FROM certificates WHERE enrollment_id = ?', enrollmentId)) issueCertificate(enrollment, course, expiresAt);
+    if (enrollment.status !== 'completed' || !enrollment.completed_at) notify(enrollment.user_id, 'course_completed', `You completed ${course.title}`,
       course.certificate_enabled ? 'Your certificate is ready to download.' : 'Well done!', '/certificates');
   }
   return get('SELECT * FROM enrollments WHERE id = ?', enrollmentId);

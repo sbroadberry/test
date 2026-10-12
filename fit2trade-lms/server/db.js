@@ -224,6 +224,19 @@ CREATE TABLE IF NOT EXISTS external_refs (
   external_id TEXT NOT NULL,
   PRIMARY KEY (entity, source, external_id)
 );
+CREATE TABLE IF NOT EXISTS companies (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  slug TEXT NOT NULL UNIQUE,
+  website TEXT DEFAULT '',
+  domains TEXT DEFAULT '',
+  email_domains TEXT DEFAULT '',
+  theme_json TEXT NOT NULL DEFAULT '{}',
+  sso_json TEXT NOT NULL DEFAULT '{}',
+  is_default INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'active',
+  created_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS settings (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
@@ -235,6 +248,16 @@ CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, read
 CREATE INDEX IF NOT EXISTS idx_sessions_start ON live_sessions(starts_at);
 `;
 db.exec(schema);
+
+// Lightweight migrations for databases created by earlier versions.
+function addColumn(table, column, ddl) {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name);
+  if (!cols.includes(column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`);
+}
+addColumn('users', 'company_id', "TEXT REFERENCES companies(id) ON DELETE SET NULL");
+addColumn('users', 'sso_provider', "TEXT DEFAULT ''");
+addColumn('courses', 'company_id', "TEXT REFERENCES companies(id) ON DELETE SET NULL");
+db.exec('CREATE INDEX IF NOT EXISTS idx_users_company ON users(company_id)');
 
 export const now = () => new Date().toISOString();
 export const uid = () => crypto.randomUUID();

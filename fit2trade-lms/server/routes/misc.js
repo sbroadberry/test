@@ -7,6 +7,8 @@ import { renderCertificate } from '../services/certificates.js';
 import { runAllReminderJobs, runCertificateExpiryCheck, DEFAULT_WINDOWS } from '../services/reminders.js';
 import { outbox, outboxItem, isMailConfigured, sendMail, layout } from '../services/mailer.js';
 import { listProviders } from '../integrations/index.js';
+import { providers as ssoProviders, isConfigured as ssoConfigured, redirectUri } from '../services/sso.js';
+const ssoStatus = () => Object.values(ssoProviders).map((p) => ({ id: p.id, label: p.label, configured: ssoConfigured(p.id), redirectUri: redirectUri(p.id), detail: ssoConfigured(p.id) ? `Client ID ${p.clientId.slice(0, 12)}…` : (p.id === 'google' ? 'Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET' : 'Set MS_SSO_CLIENT_ID, MS_SSO_CLIENT_SECRET (and MS_SSO_TENANT)') }));
 import { config } from '../config.js';
 
 // ---------------- Learning paths ----------------
@@ -144,11 +146,11 @@ notificationsRouter.post('/read', (req, res) => {
 
 // ---------------- Settings / admin ----------------
 export const settingsRouter = Router();
-settingsRouter.get('/public', (req, res) => res.json({ brand: { ...config.brand, ...getSetting('branding', {}) } }));
+settingsRouter.get('/public', (req, res) => res.json({ brand: { ...config.brand, ...getSetting('branding', {}) } })); // legacy; use /api/branding
 settingsRouter.use(authenticate, requireRole('manager'));
 settingsRouter.get('/', (req, res) => res.json({
   branding: { ...config.brand, ...getSetting('branding', {}) }, reminderWindows: getSetting('reminder_windows', DEFAULT_WINDOWS),
-  integrations: { live: listProviders(), email: { configured: isMailConfigured(), host: process.env.SMTP_HOST || '', from: process.env.SMTP_FROM || '' } },
+  integrations: { live: listProviders(), email: { configured: isMailConfigured(), host: process.env.SMTP_HOST || '', from: process.env.SMTP_FROM || '' }, sso: ssoStatus() },
   publicUrl: config.publicUrl,
 }));
 settingsRouter.put('/', requireRole('admin'), (req, res) => {

@@ -13,6 +13,7 @@ import { router as scormRouter, scormContent } from './routes/scorm.js';
 import { router as sessionsRouter } from './routes/sessions.js';
 import { pathsRouter, reportsRouter, certificatesRouter, notificationsRouter, settingsRouter } from './routes/misc.js';
 import { router as importRouter } from './routes/import.js';
+import { router as companiesRouter, publicBranding, brandAsset } from './routes/companies.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -39,6 +40,9 @@ export function createApp() {
   app.use('/api/notifications', notificationsRouter);
   app.use('/api/settings', settingsRouter);
   app.use('/api/import', importRouter);
+  app.use('/api/companies', companiesRouter);
+  app.get('/api/branding', publicBranding);
+  app.get('/brand-assets/:file', brandAsset);
 
   app.get('/scorm-runtime.js', (req, res) => res.sendFile(path.join(here, 'scorm', 'scorm-api.js')));
   app.get('/scorm-content/:pkgId/*path', authenticate, (req, res, next) => { req.params[0] = [].concat(req.params.path).join('/'); scormContent(req, res, next); });

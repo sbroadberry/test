@@ -23,6 +23,7 @@ import AdminSessions from './pages/admin/AdminSessions.jsx';
 import Reports from './pages/admin/Reports.jsx';
 import Settings from './pages/admin/Settings.jsx';
 import Import from './pages/admin/Import.jsx';
+import Companies from './pages/admin/Companies.jsx';
 
 function Guard({ children, staff, admin }) {
   const { user, loading, isStaff, isAdmin } = useAuth(); const loc = useLocation();
@@ -37,6 +38,8 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/c/:slug/login" element={<Login />} />
+      <Route path="/c/:slug" element={<Login />} />
       <Route path="/live/:id" element={<Guard><LiveRoom /></Guard>} />
       <Route element={<Guard><Layout /></Guard>}>
         <Route index element={<Dashboard />} />
@@ -59,6 +62,7 @@ export default function App() {
         <Route path="admin/users/:id" element={<Guard admin><UserRecord /></Guard>} />
         <Route path="admin/import" element={<Guard admin><Import /></Guard>} />
         <Route path="admin/settings" element={<Guard admin><Settings /></Guard>} />
+        <Route path="admin/companies" element={<Guard admin><Companies /></Guard>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

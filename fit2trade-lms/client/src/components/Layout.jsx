@@ -6,7 +6,7 @@ import { api } from '../api.js';
 import { Avatar } from './Ui.jsx';
 
 export default function Layout() {
-  const { user, logout, unread, setUnread, isStaff, isAdmin, brand } = useAuth();
+  const { user, logout, unread, setUnread, isStaff, isAdmin, brand, theme } = useAuth();
   const nav = useNavigate();
   const [open, setOpen] = useState(false);
   const [showNotif, setShowNotif] = useState(false);
@@ -20,7 +20,7 @@ export default function Layout() {
   return (
     <div className="app">
       <aside className={`sidebar ${open ? 'open' : ''}`}>
-        <div className="logo"><Link to="/"><img src="/brand/fit2trade-logo.png" alt="fit2trade" /></Link><div className="portal">{brand.name}</div></div>
+        <div className="logo"><Link to="/"><img src={theme.logoUrl} alt={theme.companyName} style={{ background: theme.logoBackground, borderRadius: 6 }} /></Link><div className="portal">{brand.name}</div></div>
         <nav className="nav" onClick={() => setOpen(false)}>
           <div className="section">My learning</div>
           <NavLink to="/" end><Icons.home />Dashboard</NavLink>
@@ -37,10 +37,11 @@ export default function Layout() {
             {isAdmin && <NavLink to="/admin/users"><Icons.users />Users & groups</NavLink>}
             <NavLink to="/admin/reports"><Icons.chart />Reports</NavLink>
             {isAdmin && <NavLink to="/admin/import"><Icons.database />Migrate / import</NavLink>}
+            {isAdmin && <NavLink to="/admin/companies"><Icons.layers />Companies & branding</NavLink>}
             {isAdmin && <NavLink to="/admin/settings"><Icons.settings />Settings</NavLink>}
           </>)}
         </nav>
-        <div className="foot">Fit2Trade Ltd · {brand.tagline}<br /><a href="https://www.fit2trade.com" target="_blank" rel="noreferrer">fit2trade.com</a></div>
+        <div className="foot">{brand.company} · {brand.tagline}<br /><a href={brand.website} target="_blank" rel="noreferrer">{String(brand.website || '').replace(/^https?:\/\/(www\.)?/, '')}</a></div>
       </aside>
       <div className="main">
         <header className="topbar">

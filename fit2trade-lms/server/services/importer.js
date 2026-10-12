@@ -56,7 +56,8 @@ export function summariseDataset(ds) {
 
 /** Apply the dataset. options: { updateExisting, createMissingCourses, defaultPassword, notifyUsers, assignGroup, skipInactive } */
 export function applyDataset(ds, options = {}, actorId = null) {
-  const opts = { updateExisting: true, createMissingCourses: true, defaultPassword: 'Welcome2Learn!', notifyUsers: false, assignGroup: '', skipInactive: false, ...options };
+  const opts = { updateExisting: true, createMissingCourses: true, defaultPassword: 'Welcome2Learn!', notifyUsers: false, assignGroup: '', skipInactive: false, companyId: '', ...options };
+  const companyId = (opts.companyId && get('SELECT id FROM companies WHERE id = ?', opts.companyId)?.id) || get('SELECT id FROM companies WHERE is_default = 1')?.id || null;
   const result = { users: { created: 0, updated: 0, skipped: 0 }, groups: { created: 0 }, courses: { created: 0, matched: 0 }, enrollments: { created: 0, updated: 0, skipped: 0 }, certificates: { created: 0, skipped: 0 }, errors: [] };
   const ts = now();
   const passwordHash = bcrypt.hashSync(opts.defaultPassword, 8);
@@ -71,9 +72,9 @@ export function applyDataset(ds, options = {}, actorId = null) {
       let user = get('SELECT * FROM users WHERE email = ?', u.email);
       if (!user) {
         const id = uid();
-        run(`INSERT INTO users(id, email, password_hash, first_name, last_name, role, status, job_title, department, location, external_source, external_id, must_change_password, created_at)
-             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,1,?)`, id, u.email, passwordHash, u.first_name || u.email.split('@')[0], u.last_name || '', u.role || 'learner', u.status || 'active',
-          u.job_title || '', u.department || '', u.location || '', source, u.external_id || '', u.created_at || ts);
+        run(`INSERT INTO users(id, email, password_hash, first_name, last_name, role, status, job_title, department, location, external_source, external_id, must_change_password, company_id, created_at)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,1,?,?)`, id, u.email, passwordHash, u.first_name || u.email.split('@')[0], u.last_name || '', u.role || 'learner', u.status || 'active',
+          u.job_title || '', u.department || '', u.location || '', source, u.external_id || '', companyId, u.created_at || ts);
         user = get('SELECT * FROM users WHERE id = ?', id);
         result.users.created += 1;
         if (opts.notifyUsers) notify(id, 'welcome', 'Welcome to Fit2Trade Learn', 'Your learning history has been migrated. Please update your password from your profile.', '/profile');

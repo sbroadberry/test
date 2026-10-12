@@ -1,0 +1,17 @@
+import fs from 'node:fs';
+import { startDemoServer, launch, login } from '../e2e/helpers.mjs';
+const out = process.argv[2] || 'docs/screenshots'; fs.mkdirSync(out, { recursive: true });
+const srv = await startDemoServer(); const browser = await launch();
+const ctx = await browser.newContext({ viewport: { width: 1360, height: 860 } }); const page = await ctx.newPage();
+const errors = []; page.on('pageerror', (e) => errors.push(e.message));
+const shot = async (n, full = false) => { await page.waitForTimeout(700); await page.screenshot({ path: `${out}/${n}.png`, fullPage: full }); console.log('✓', n); };
+await page.goto(srv.baseUrl + '/c/eazysafe/login'); await shot('52-login-eazysafe');
+await page.goto(srv.baseUrl + '/c/iact/login'); await shot('53-login-iact');
+await login(page, srv.baseUrl, 'learner@eazysafe.com', 'Learner123!'); await shot('54-learner-eazysafe-theme', true);
+await ctx.clearCookies(); await page.goto(srv.baseUrl + '/c/iact/login'); await login(page, srv.baseUrl, 'learner@iact.ie', 'Learner123!'); await shot('55-learner-iact-theme');
+await ctx.clearCookies(); await page.goto(srv.baseUrl + '/login'); await login(page, srv.baseUrl, 'admin@fit2trade.com', 'Admin123!');
+await page.goto(srv.baseUrl + '/admin/companies'); await shot('56-companies', true);
+await page.click('[data-testid=edit-eazysafe]'); await page.waitForSelector('.modal'); await page.click('.modal .tabs button:has-text("Theme")'); await shot('57-company-theme-editor', true);
+await page.click('.modal .tabs button:has-text("Single sign-on")'); await shot('58-company-sso');
+await page.keyboard.press('Escape'); await page.click('[data-testid=new-company]'); await page.waitForSelector('.modal'); await page.fill('[data-testid=company-name]', 'Acme Hotels'); await shot('59-new-company');
+console.log('errors', errors); await browser.close(); srv.stop();

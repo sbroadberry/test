@@ -34,7 +34,7 @@ export function courseWithModules(id, { includeAnswers = false } = {}) {
 router.get('/', (req, res) => {
   const staff = isStaff(req.user);
   const { q = '', category = '', status = '' } = req.query;
-  const where = [staff ? '1=1' : "c.status = 'published'"]; const params = [];
+  const where = [staff ? '1=1' : "c.status = 'published' AND (c.company_id IS NULL OR c.company_id = ?)"]; const params = staff ? [] : [req.user.company_id || ''];
   if (q) { where.push('(c.title LIKE ? OR c.description LIKE ?)'); params.push(`%${q}%`, `%${q}%`); }
   if (category) { where.push('c.category = ?'); params.push(category); }
   if (status && staff) { where.push('c.status = ?'); params.push(status); }
@@ -45,14 +45,15 @@ router.get('/', (req, res) => {
       (SELECT e.status FROM enrollments e WHERE e.course_id = c.id AND e.user_id = ?) AS my_status,
       (SELECT e.progress_pct FROM enrollments e WHERE e.course_id = c.id AND e.user_id = ?) AS my_progress
     FROM courses c WHERE ${where.join(' AND ')} ORDER BY c.updated_at DESC`, req.user.id, req.user.id, req.user.id, ...params);
+  const companies = staff ? all('SELECT id, name FROM companies ORDER BY name') : [];
   const categories = all("SELECT DISTINCT category FROM courses WHERE status = 'published' ORDER BY category").map((r) => r.category);
-  res.json({ courses: rows, categories });
+  res.json({ courses: rows, categories, companies });
 });
 
 router.get('/:id', (req, res) => {
   const course = courseWithModules(req.params.id, { includeAnswers: isStaff(req.user) });
   if (!course) return res.status(404).json({ error: 'Course not found' });
-  if (course.status !== 'published' && !isStaff(req.user)) return res.status(404).json({ error: 'Course not found' });
+  if (!isStaff(req.user) && (course.status !== 'published' || (course.company_id && course.company_id !== req.user.company_id))) return res.status(404).json({ error: 'Course not found' });
   const enrollment = get('SELECT * FROM enrollments WHERE course_id = ? AND user_id = ?', course.id, req.user.id);
   const stats = get(`SELECT COUNT(*) AS enrolled, SUM(status = 'completed') AS completed, AVG(score) AS avg_score FROM enrollments WHERE course_id = ?`, course.id);
   res.json({ course, enrollment, stats });
@@ -62,9 +63,9 @@ router.post('/', requireRole('instructor'), (req, res) => {
   const b = req.body || {};
   if (!b.title) return res.status(400).json({ error: 'title is required' });
   const id = uid(); const ts = now();
-  run(`INSERT INTO courses(id, title, description, category, thumbnail_url, status, self_enrol, duration_minutes, pass_mark, certificate_enabled, certificate_validity_months, level, created_by, created_at, updated_at)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, id, b.title, b.description || '', b.category || 'General', b.thumbnail_url || '', b.status || 'draft', b.self_enrol ? 1 : 0,
-    b.duration_minutes ?? 30, b.pass_mark ?? 70, b.certificate_enabled === false ? 0 : 1, b.certificate_validity_months || null, b.level || 'All levels', req.user.id, ts, ts);
+  run(`INSERT INTO courses(id, title, description, category, thumbnail_url, status, self_enrol, duration_minutes, pass_mark, certificate_enabled, certificate_validity_months, level, created_by, created_at, updated_at, company_id)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, id, b.title, b.description || '', b.category || 'General', b.thumbnail_url || '', b.status || 'draft', b.self_enrol ? 1 : 0,
+    b.duration_minutes ?? 30, b.pass_mark ?? 70, b.certificate_enabled === false ? 0 : 1, b.certificate_validity_months || null, b.level || 'All levels', req.user.id, ts, ts, b.company_id || null);
   audit(req.user.id, 'course.create', 'course', id);
   res.status(201).json({ course: courseWithModules(id, { includeAnswers: true }) });
 });
@@ -74,9 +75,9 @@ router.put('/:id', requireRole('instructor'), (req, res) => {
   if (!get('SELECT 1 FROM courses WHERE id = ?', req.params.id)) return res.status(404).json({ error: 'Course not found' });
   run(`UPDATE courses SET title = COALESCE(?, title), description = COALESCE(?, description), category = COALESCE(?, category), thumbnail_url = COALESCE(?, thumbnail_url), status = COALESCE(?, status),
        self_enrol = COALESCE(?, self_enrol), duration_minutes = COALESCE(?, duration_minutes), pass_mark = COALESCE(?, pass_mark), certificate_enabled = COALESCE(?, certificate_enabled),
-       certificate_validity_months = ?, level = COALESCE(?, level), updated_at = ? WHERE id = ?`,
+       certificate_validity_months = ?, level = COALESCE(?, level), updated_at = ?, company_id = CASE WHEN ? THEN ? ELSE company_id END WHERE id = ?`,
     b.title, b.description, b.category, b.thumbnail_url, b.status, b.self_enrol == null ? null : (b.self_enrol ? 1 : 0), b.duration_minutes, b.pass_mark,
-    b.certificate_enabled == null ? null : (b.certificate_enabled ? 1 : 0), b.certificate_validity_months === undefined ? get('SELECT certificate_validity_months v FROM courses WHERE id = ?', req.params.id).v : (b.certificate_validity_months || null), b.level, now(), req.params.id);
+    b.certificate_enabled == null ? null : (b.certificate_enabled ? 1 : 0), b.certificate_validity_months === undefined ? get('SELECT certificate_validity_months v FROM courses WHERE id = ?', req.params.id).v : (b.certificate_validity_months || null), b.level, now(), b.company_id !== undefined ? 1 : 0, b.company_id || null, req.params.id);
   audit(req.user.id, 'course.update', 'course', req.params.id);
   res.json({ course: courseWithModules(req.params.id, { includeAnswers: true }) });
 });

@@ -7,11 +7,12 @@ import { PageHead } from '../../components/Layout.jsx';
 export default function Import() {
   const toast = useToast();
   const sources = useAsync(() => api.get('/api/import/sources'));
+  const companies = useAsync(() => api.get('/api/companies').catch(() => ({ companies: [] })));
   const jobs = useAsync(() => api.get('/api/import/jobs'));
   const [step, setStep] = useState(1); const [source, setSource] = useState('talentlms'); const [mode, setMode] = useState('csv'); const [files, setFiles] = useState([]);
   const [apiForm, setApiForm] = useState({ domain: '', apiKey: '', username: '', password: '' }); const [dateFormat, setDateFormat] = useState('dmy');
   const [preview, setPreview] = useState(null); const [busy, setBusy] = useState(false); const [result, setResult] = useState(null); const [overrides, setOverrides] = useState({});
-  const [options, setOptions] = useState({ updateExisting: true, createMissingCourses: true, defaultPassword: 'Welcome2Learn!', notifyUsers: true, assignGroup: '', skipInactive: false });
+  const [options, setOptions] = useState({ updateExisting: true, createMissingCourses: true, defaultPassword: 'Welcome2Learn!', notifyUsers: true, assignGroup: '', skipInactive: false, companyId: '' });
   const src = sources.data?.sources.find((s) => s.id === source);
   const runPreview = async (ov = overrides) => {
     setBusy(true);
@@ -55,7 +56,8 @@ export default function Import() {
         <label className="check"><input type="checkbox" checked={options.notifyUsers} onChange={(e) => setOptions({ ...options, notifyUsers: e.target.checked })} /> Send migrated users a welcome notification</label>
         <label className="check"><input type="checkbox" checked={options.skipInactive} onChange={(e) => setOptions({ ...options, skipInactive: e.target.checked })} /> Skip inactive / deactivated users</label>
         <Field label="Temporary password for new users"><Input value={options.defaultPassword} onChange={(e) => setOptions({ ...options, defaultPassword: e.target.value })} /></Field>
-        <Field label="Add all imported users to group (optional)"><Input value={options.assignGroup} onChange={(e) => setOptions({ ...options, assignGroup: e.target.value })} placeholder="e.g. Migrated from TalentLMS" /></Field></div></div>
+        <Field label="Add all imported users to group (optional)"><Input value={options.assignGroup} onChange={(e) => setOptions({ ...options, assignGroup: e.target.value })} placeholder="e.g. Migrated from TalentLMS" /></Field>
+        <Field label="Company for new users"><Select value={options.companyId} onChange={(e) => setOptions({ ...options, companyId: e.target.value })}><option value="">Default company</option>{(companies.data?.companies || []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</Select></Field></div></div>
       <div className="row"><Button variant="secondary" onClick={reset}>Start over</Button><Button onClick={run} disabled={busy} data-testid="import-run">{busy ? 'Importing…' : `Import ${s.users.total} users and ${s.enrollments.total} records`}</Button></div></div>}
     {step === 4 && result && <div className="stack"><div className="notice" data-testid="import-result"><strong>Migration complete.</strong> Users: {result.users.created} created, {result.users.updated} updated, {result.users.skipped} skipped · Groups created: {result.groups.created} · Courses: {result.courses.created} created, {result.courses.matched} matched · Learning records: {result.enrollments.created} created, {result.enrollments.updated} updated, {result.enrollments.skipped} skipped · Certificates: {result.certificates.created} created, {result.certificates.skipped} already present.</div>
       {result.errors.length > 0 && <div className="notice amber"><strong>{result.errors.length} record(s) could not be matched</strong><ul className="small">{result.errors.slice(0, 15).map((e, i) => <li key={i}>{e}</li>)}</ul></div>}

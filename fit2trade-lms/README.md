@@ -14,6 +14,8 @@ Colours and logo come from the official Fit2Trade logo: green `#275c4d` (the tic
 | Live sessions (ILT) | Scheduling with **Microsoft Teams** (Microsoft Graph online meetings) or **Cisco Webex** meetings created automatically, join/host links, capacity, registration, cancellation notifications, attendance synced back from Teams attendance reports / Webex participants, manual attendance, attendance completes the linked course module. A built-in virtual classroom is used when no credentials are configured |
 | Compliance | Certificates with validity periods, PDF download, public verification endpoint, expiry report, **certificate-expiry reminders** (in-app and email at 60/30/14/7 days and on expiry, admin digest of expired certificates), due-date reminders, email outbox |
 | Reporting | Admin overview (completion rate, monthly completions, department and course breakdowns), expiry report, CSV exports (enrolments, certificates, users, sessions), audit log |
+| Companies & branding | Multi-company portals: each company has its own logo, colours, login page copy, hostnames, email domains and SSO rules. Theme editor with live preview and sample themes for **Fit2Trade**, **EazySAFE** and **IACT**. Courses can be shared or restricted to a company |
+| Single sign-on | **Google** and **Microsoft** (OpenID Connect authorization-code flow) with per-company enable switches, email-domain restrictions and automatic account provisioning |
 | Migration | Import users, learning records and certificates from **TalentLMS** (REST API or CSV exports), **LearnUpon** (API or CSV), **Moodle** and any generic CSV. Automatic column detection, date-format handling, preview/dry run, idempotent re-runs, placeholder courses for historic completions, temporary passwords, welcome notifications |
 
 ## Quick start
@@ -33,6 +35,8 @@ Demo accounts are created on first start (set `SEED_DEMO=false` to create only t
 | Manager | manager@fit2trade.com | Manager123! |
 | Instructor | trainer@fit2trade.com | Trainer123! |
 | Learner | aoife.murphy@example.com | Learner123! |
+| EazySAFE learner | learner@eazysafe.com (`/c/eazysafe/login`) | Learner123! |
+| IACT learner | learner@iact.ie (`/c/iact/login`) | Learner123! |
 
 Development with hot reload: `npm run dev` (API on 4000, Vite on 5173 with proxy).
 
@@ -47,6 +51,8 @@ Copy `.env.example` to `.env`. All settings are optional for a demo.
 | `MS_GRAPH_BASE_URL`, `MS_LOGIN_BASE_URL` | Override Graph endpoints (sovereign clouds, tests) |
 | `WEBEX_ACCESS_TOKEN`, `WEBEX_BASE_URL` | Cisco Webex integration / service app token with `meeting:schedules_write`, `meeting:schedules_read`, `meeting:participants_read` |
 | `LIVE_PROVIDER_SIMULATE` | `true` (default) falls back to the built-in classroom when a provider is not configured |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google sign-in (OAuth web client; redirect URI `<PUBLIC_URL>/api/auth/sso/google/callback`) |
+| `MS_SSO_CLIENT_ID`, `MS_SSO_CLIENT_SECRET`, `MS_SSO_TENANT` | Microsoft sign-in (Entra app registration; redirect URI `<PUBLIC_URL>/api/auth/sso/microsoft/callback`) |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | Email delivery for reminders and session confirmations. Without SMTP, emails are recorded in the outbox (Settings → Notifications) but not sent |
 
 ## Project layout
@@ -65,6 +71,10 @@ tests/
   e2e/             Playwright: real SCORM packages running in Chromium (launch, bookmark, resume, score, completion)
   fixtures/        build-scorm-packages.js generates the SCORM 1.2 / 2004 test packages
 ```
+
+## Companies and themes
+
+Admin → **Companies & branding**. Create a company, pick a sample theme (Fit2Trade, EazySAFE, IACT) or set your own logo, colours and login copy, and choose SSO rules. Learners reach a company portal at `/c/<slug>/login` or via the company's hostname; after sign-in the whole learning environment, certificates and emails use the company theme.
 
 ## Tests
 

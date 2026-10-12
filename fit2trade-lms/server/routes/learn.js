@@ -133,8 +133,9 @@ enrollmentsRouter.put('/:id', (req, res) => {
   if (expiresAt !== undefined) run('UPDATE enrollments SET expires_at = ? WHERE id = ?', expiresAt, e.id);
   if (status === 'completed' && e.status !== 'completed') {
     // manual completion by an admin/instructor (e.g. classroom course)
-    run("UPDATE enrollments SET status = 'completed', progress_pct = 100, score = COALESCE(?, score), completed_at = ? WHERE id = ?", score, now(), e.id);
+    run("UPDATE enrollments SET progress_pct = 100, score = COALESCE(?, score) WHERE id = ?", score, e.id);
     for (const m of all('SELECT id FROM modules WHERE course_id = ?', e.course_id)) updateModuleProgress(e.id, m.id, { status: 'completed' });
+    run("UPDATE enrollments SET status = 'completed', completed_at = COALESCE(completed_at, ?) WHERE id = ?", now(), e.id);
     recomputeEnrollment(e.id);
     audit(req.user.id, 'enrollment.manual_complete', 'enrollment', e.id);
   } else if (status === 'reset') {

@@ -15,7 +15,7 @@ export const config = {
   dbPath: env.DB_PATH || path.join(dataDir, 'lms.db'),
   uploadsDir: path.join(dataDir, 'uploads'),
   scormDir: path.join(dataDir, 'scorm'),
-  publicUrl: env.PUBLIC_URL || `http://localhost:${env.PORT || 4000}`,
+  get publicUrl() { return process.env.PUBLIC_URL || `http://localhost:${process.env.PORT || 4000}`; },
   brand: {
     name: 'Fit2Trade Learn',
     company: 'Fit2Trade Ltd',
